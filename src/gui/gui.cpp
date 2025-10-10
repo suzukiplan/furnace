@@ -3797,17 +3797,36 @@ bool FurnaceGUI::importSongFromText(const String& path) {
                   defaultCell.volume = -1;
 
                   for (int ch = 0; ch < sub.channelCount; ch++) {
+                    int patternIdx = -1;
+                    if (ch < (int)sub.orders.size() && orderIndex < (int)sub.orders[ch].size()) {
+                      patternIdx = sub.orders[ch][orderIndex] & 0xff;
+                    }
+                    if (patternIdx < 0) {
+                      patternIdx = orderIndex & 0xff;
+                    }
+
+                    ParsedChannelPatterns& channel = sub.channelData[ch];
+                    auto& rows = ensurePatternRows(channel, patternIdx, sub.patLen);
+
+                    ParsedPatternCell cell = defaultCell;
+
                     if (cursor >= rowLine.size() || rowLine[cursor] != '|') {
-                      break;
+                      if (rowIndex >= 0 && rowIndex < sub.patLen) {
+                        rows[rowIndex] = cell;
+                      }
+                      continue;
                     }
                     cursor++;
                     if (cursor + 3 >= rowLine.size()) {
-                      break;
+                      if (rowIndex >= 0 && rowIndex < sub.patLen) {
+                        rows[rowIndex] = cell;
+                      }
+                      cursor = rowLine.size();
+                      continue;
                     }
                     std::string noteToken = rowLine.substr(cursor, 4);
                     cursor += 4;
                     trimInPlace(noteToken);
-                    ParsedPatternCell cell = defaultCell;
                     int parsedNote = 0;
                     int parsedOctave = 0;
                     if (parseNoteToken(noteToken, parsedNote, parsedOctave)) {
@@ -3816,7 +3835,11 @@ bool FurnaceGUI::importSongFromText(const String& path) {
                     }
 
                     if (cursor + 2 >= rowLine.size()) {
-                      break;
+                      if (rowIndex >= 0 && rowIndex < sub.patLen) {
+                        rows[rowIndex] = cell;
+                      }
+                      cursor = rowLine.size();
+                      continue;
                     }
                     std::string instToken = rowLine.substr(cursor, 3);
                     cursor += 3;
@@ -3831,7 +3854,11 @@ bool FurnaceGUI::importSongFromText(const String& path) {
                     }
 
                     if (cursor + 1 >= rowLine.size()) {
-                      break;
+                      if (rowIndex >= 0 && rowIndex < sub.patLen) {
+                        rows[rowIndex] = cell;
+                      }
+                      cursor = rowLine.size();
+                      continue;
                     }
                     std::string volToken = rowLine.substr(cursor, 2);
                     cursor += 2;
@@ -3879,16 +3906,6 @@ bool FurnaceGUI::importSongFromText(const String& path) {
                       cell.effectValues.push_back(value);
                     }
 
-                    int patternIdx = -1;
-                    if (ch < (int)sub.orders.size() && orderIndex < (int)sub.orders[ch].size()) {
-                      patternIdx = sub.orders[ch][orderIndex] & 0xff;
-                    }
-                    if (patternIdx < 0) {
-                      patternIdx = orderIndex & 0xff;
-                    }
-
-                    ParsedChannelPatterns& channel = sub.channelData[ch];
-                    auto& rows = ensurePatternRows(channel, patternIdx, sub.patLen);
                     if (rowIndex >= 0 && rowIndex < sub.patLen) {
                       rows[rowIndex] = cell;
                     }
