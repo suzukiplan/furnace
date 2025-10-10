@@ -3545,6 +3545,7 @@ bool FurnaceGUI::importSongFromText(const String& path) {
         }
         if (header.rfind("## ", 0) == 0) {
           ParsedSubSong sub;
+          bool patternsPrepared = false;
           size_t colon = header.find(':');
           if (colon != std::string::npos) {
             std::string idxStr = header.substr(3, colon - 3);
@@ -3688,67 +3689,77 @@ bool FurnaceGUI::importSongFromText(const String& path) {
               }
               continue;
             }
+            logI("importSongFromText section lineSub='%s'", lineSub.c_str());
             if (lineSub == "## Patterns") {
               pos++;
-              if (sub.channelCount == 0) {
-                while (pos < lines.size() && lines[pos].empty()) {
-                  pos++;
+              continue;
+            }
+            if (lineSub.rfind("----- ORDER ", 0) == 0) {
+              auto preparePatternStorage = [&]() {
+                if (patternsPrepared) {
+                  return;
                 }
-                int inferredChannels = 0;
-                size_t scanPos = pos;
-                while (scanPos < lines.size()) {
-                  std::string peekLine = lines[scanPos];
-                  if (peekLine.empty()) {
-                    scanPos++;
-                    continue;
-                  }
-                  if (peekLine.rfind("----- ORDER ", 0) != 0) {
-                    break;
-                  }
-                  scanPos++;
-                  while (scanPos < lines.size() && lines[scanPos].empty()) {
-                    scanPos++;
-                  }
-                  if (scanPos >= lines.size()) {
-                    break;
-                  }
-                  std::string rowLine = lines[scanPos];
-                  size_t tmpCursor = 2;
-                  if (rowLine.size() > 2 && rowLine[2] == ' ') tmpCursor++;
-                  int localChannels = 0;
-                  while (tmpCursor < rowLine.size()) {
-                    if (rowLine[tmpCursor] != '|') break;
-                    tmpCursor++;
-                    if (tmpCursor + 3 >= rowLine.size()) break;
-                    tmpCursor += 4;
-                    if (tmpCursor + 2 > rowLine.size()) break;
-                    tmpCursor += 3;
-                    if (tmpCursor + 1 > rowLine.size()) break;
-                    tmpCursor += 2;
-                    while (tmpCursor < rowLine.size() && rowLine[tmpCursor] == ' ') {
-                      tmpCursor++;
-                      if (tmpCursor + 1 >= rowLine.size()) break;
-                      tmpCursor += 4;
+                if (sub.channelCount == 0) {
+                  int inferredChannels = 0;
+                  size_t scanPos = pos;
+                  while (scanPos < lines.size()) {
+                    std::string peekLine = lines[scanPos];
+                    if (peekLine.empty()) {
+                      scanPos++;
+                      continue;
                     }
-                    localChannels++;
+                    if (peekLine.rfind("----- ORDER ", 0) != 0) {
+                      break;
+                    }
+                    size_t rowScan = scanPos + 1;
+                    while (rowScan < lines.size() && lines[rowScan].empty()) {
+                      rowScan++;
+                    }
+                    if (rowScan >= lines.size()) {
+                      break;
+                    }
+                    std::string rowLine = lines[rowScan];
+                    size_t tmpCursor = 2;
+                    if (rowLine.size() > 2 && rowLine[2] == ' ') tmpCursor++;
+                    int localChannels = 0;
+                    while (tmpCursor < rowLine.size()) {
+                      if (rowLine[tmpCursor] != '|') break;
+                      tmpCursor++;
+                      if (tmpCursor + 3 >= rowLine.size()) break;
+                      tmpCursor += 4;
+                      if (tmpCursor + 2 > rowLine.size()) break;
+                      tmpCursor += 3;
+                      if (tmpCursor + 1 > rowLine.size()) break;
+                      tmpCursor += 2;
+                      while (tmpCursor < rowLine.size() && rowLine[tmpCursor] == ' ') {
+                        tmpCursor++;
+                        if (tmpCursor + 1 >= rowLine.size()) break;
+                        tmpCursor += 4;
+                      }
+                      localChannels++;
+                    }
+                    if (localChannels > inferredChannels) {
+                      inferredChannels = localChannels;
+                    }
+                    break;
                   }
-                  if (localChannels > inferredChannels) {
-                    inferredChannels = localChannels;
-                  }
-                  break;
+                  sub.channelCount = inferredChannels;
                 }
-                sub.channelCount = inferredChannels;
-              }
-              if (sub.channelCount <= 0) {
-                sub.channelCount = (int)sub.orders.size();
-              }
-              if (sub.channelCount <= 0) {
-                sub.channelCount = 0;
-              }
-              sub.channelData.resize(sub.channelCount);
+                if (sub.channelCount <= 0) {
+                  sub.channelCount = (int)sub.orders.size();
+                }
+                if (sub.channelCount <= 0) {
+                  sub.channelCount = 0;
+                }
+                sub.channelData.resize(sub.channelCount);
+                patternsPrepared = true;
+              };
+
+              preparePatternStorage();
 
               while (pos < lines.size()) {
                 std::string patLine = lines[pos];
+                logI("importSongFromText patLine='%s'", patLine.c_str());
                 if (patLine.empty()) {
                   pos++;
                   continue;
@@ -3768,6 +3779,7 @@ bool FurnaceGUI::importSongFromText(const String& path) {
 
                 while (pos < lines.size()) {
                   std::string rowLine = lines[pos];
+                  logI("importSongFromText rowLine='%s'", rowLine.c_str());
                   if (rowLine.empty()) {
                     pos++;
                     continue;
