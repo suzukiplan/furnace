@@ -42,6 +42,7 @@
 #include <stdexcept>
 #include <sstream>
 #include <cctype>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -3128,36 +3129,28 @@ int FurnaceGUI::load(String path)
   return 0;
 }
 
-bool FurnaceGUI::importSongFromText(const String &path)
-{
-  FILE *f = ps_fopen(path.c_str(), "rb");
-  if (f == NULL)
-  {
+bool FurnaceGUI::importSongFromText(const String& path) {
+  FILE* f = ps_fopen(path.c_str(), "rb");
+  if (f == NULL) {
     lastError = strerror(errno);
     return false;
   }
-  if (fseek(f, 0, SEEK_END) < 0)
-  {
+  if (fseek(f, 0, SEEK_END) < 0) {
     lastError = fmt::sprintf(_("on seek: %s"), strerror(errno));
     fclose(f);
     return false;
   }
   ssize_t len = ftell(f);
-  if (len <= 0)
-  {
-    if (len == 0)
-    {
+  if (len <= 0) {
+    if (len == 0) {
       lastError = _("file is empty");
-    }
-    else
-    {
+    } else {
       lastError = fmt::sprintf(_("on tell: %s"), strerror(errno));
     }
     fclose(f);
     return false;
   }
-  if (fseek(f, 0, SEEK_SET) < 0)
-  {
+  if (fseek(f, 0, SEEK_SET) < 0) {
     lastError = fmt::sprintf(_("on get size: %s"), strerror(errno));
     fclose(f);
     return false;
@@ -3166,66 +3159,104 @@ bool FurnaceGUI::importSongFromText(const String &path)
   std::string content;
   content.resize((size_t)len);
   char* rawBuf = content.empty() ? nullptr : &content[0];
-  if (rawBuf == nullptr || fread(rawBuf, 1, (size_t)len, f) != (size_t)len)
-  {
+  if (rawBuf == nullptr || fread(rawBuf, 1, (size_t)len, f) != (size_t)len) {
     lastError = fmt::sprintf(_("on read: %s"), strerror(errno));
     fclose(f);
     return false;
   }
   fclose(f);
 
-  auto stripBom = [](std::string &s)
-  {
-    if (!s.empty() && (unsigned char)s[0] == 0xef && s.size() >= 3 && (unsigned char)s[1] == 0xbb && (unsigned char)s[2] == 0xbf)
-    {
+  auto stripBom = [](std::string& s) {
+    if (s.size() >= 3 && (unsigned char)s[0] == 0xef && (unsigned char)s[1] == 0xbb && (unsigned char)s[2] == 0xbf) {
       s.erase(0, 3);
     }
   };
 
-  auto trimInPlace = [](std::string &s)
-  {
+  auto trimInPlace = [](std::string& s) {
     size_t start = 0;
-    while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start])))
-    {
+    while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start]))) {
       start++;
     }
     size_t end = s.size();
-    while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1])))
-    {
+    while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1]))) {
       end--;
     }
     s = s.substr(start, end - start);
   };
 
-  std::istringstream check(content);
-  std::string line;
-  bool headerFound = false;
-  while (std::getline(check, line))
-  {
-    if (!line.empty() && line.back() == '\r')
-      line.pop_back();
-    stripBom(line);
-    if (line.empty())
-      continue;
-    if (line == "# Furnace Text Export")
-    {
-      headerFound = true;
-      break;
+  auto parseIntFromString = [&](const std::string& text, int base, int& out) -> bool {
+    try {
+      size_t pos = 0;
+      int value = std::stoi(text, &pos, base);
+      if (pos != text.size()) {
+        return false;
+      }
+      out = value;
+      return true;
+    } catch (...) {
+      return false;
     }
-    lastError = _("not a Furnace text export");
-    return false;
-  }
-  if (!headerFound)
+  };
+
+  auto parseDoubleFromString = [&](const std::string& text, double& out) -> bool {
+    try {
+      size_t pos = 0;
+      double value = std::stod(text, &pos);
+      if (pos != text.size()) {
+        return false;
+      }
+      out = value;
+      return true;
+    } catch (...) {
+      return false;
+    }
+  };
+
+  std::vector<std::string> lines;
   {
+    std::istringstream allStream(content);
+    bool firstLine = true;
+    std::string lineAll;
+    while (std::getline(allStream, lineAll)) {
+      if (!lineAll.empty() && lineAll.back() == '\r') {
+        lineAll.pop_back();
+      }
+      if (firstLine) {
+        stripBom(lineAll);
+        firstLine = false;
+      }
+      lines.push_back(lineAll);
+    }
+  }
+
+  bool headerFound = false;
+  for (const std::string& hdrLine : lines) {
+    if (hdrLine.empty()) {
+      continue;
+    }
+    if (hdrLine == "# Furnace Text Export") {
+      headerFound = true;
+    }
+    break;
+  }
+  if (!headerFound) {
     lastError = _("not a Furnace text export");
     return false;
   }
 
-  std::istringstream parser(content);
-  bool inSongInfo = false;
-  bool inComments = false;
-  bool foundSongInfo = false;
-  bool commentStarted = false;
+  struct ParsedSystem {
+    DivSystem id;
+    double volume;
+    double pan;
+    double frontRear;
+    String flags;
+    ParsedSystem():
+      id(DIV_SYSTEM_NULL),
+      volume(1.0),
+      pan(0.0),
+      frontRear(0.0),
+      flags() {}
+  };
 
   String songName;
   String author;
@@ -3234,114 +3265,227 @@ bool FurnaceGUI::importSongFromText(const String &path)
   String commentBuffer;
   double parsedTuning = 0.0;
   bool tuningSet = false;
+  bool foundSongInfo = false;
+  std::vector<ParsedSystem> parsedSystems;
 
-  while (std::getline(parser, line))
-  {
-    if (!line.empty() && line.back() == '\r')
-      line.pop_back();
-    stripBom(line);
-
-    if (line.rfind("# ", 0) == 0)
-    {
-      if (line == "# Song Information")
-      {
-        inSongInfo = true;
-        inComments = false;
-        foundSongInfo = true;
-      }
-      else if (line == "# Song Comments")
-      {
-        inSongInfo = false;
-        inComments = true;
-        commentStarted = false;
-        commentBuffer.clear();
-      }
-      else
-      {
-        inSongInfo = false;
-        inComments = false;
-      }
-      continue;
-    }
-
-    if (inSongInfo)
-    {
-      if (line.rfind("- ", 0) != 0)
-      {
-        continue;
-      }
-      size_t colon = line.find(':', 2);
-      if (colon == std::string::npos)
-        continue;
-      std::string key = line.substr(2, colon - 2);
-      std::string value = line.substr(colon + 1);
-      trimInPlace(key);
-      trimInPlace(value);
-      if (key == "name")
-      {
-        songName = value;
-      }
-      else if (key == "author")
-      {
-        author = value;
-      }
-      else if (key == "album")
-      {
-        album = value;
-      }
-      else if (key == "system")
-      {
-        systemName = value;
-      }
-      else if (key == "tuning")
-      {
-        if (!value.empty())
-        {
-          try
-          {
-            parsedTuning = std::stod(value);
-            tuningSet = true;
-          }
-          catch (...)
-          {
-            // ignore parse errors
-          }
+  size_t idx = 0;
+  while (idx < lines.size()) {
+    const std::string& curLine = lines[idx];
+    if (curLine == "# Song Information") {
+      size_t pos = idx + 1;
+      while (pos < lines.size()) {
+        std::string entryLine = lines[pos];
+        if (!entryLine.empty() && entryLine[0] == '#') {
+          break;
         }
-      }
-      continue;
-    }
-
-    if (inComments)
-    {
-      if (!commentStarted)
-      {
-        if (line.empty())
-        {
+        if (entryLine.empty()) {
+          pos++;
           continue;
         }
-        commentBuffer = line;
-        commentStarted = true;
+        if (entryLine.rfind("- ", 0) != 0) {
+          pos++;
+          continue;
+        }
+        std::string entry = entryLine.substr(2);
+        size_t colon = entry.find(':');
+        if (colon == std::string::npos) {
+          pos++;
+          continue;
+        }
+        std::string key = entry.substr(0, colon);
+        std::string value = entry.substr(colon + 1);
+        trimInPlace(key);
+        trimInPlace(value);
+        if (key == "name") {
+          songName = value;
+        } else if (key == "author") {
+          author = value;
+        } else if (key == "album") {
+          album = value;
+        } else if (key == "system") {
+          systemName = value;
+        } else if (key == "tuning") {
+          double parsed = 0.0;
+          if (parseDoubleFromString(value, parsed)) {
+            parsedTuning = parsed;
+            tuningSet = true;
+          }
+        }
+        pos++;
       }
-      else
-      {
-        commentBuffer += '\n';
-        commentBuffer += line;
+      foundSongInfo = true;
+      idx = pos;
+      continue;
+    }
+    if (curLine == "# Song Comments") {
+      size_t pos = idx + 1;
+      bool commentStarted = false;
+      String buffer;
+      while (pos < lines.size()) {
+        const std::string& commentLine = lines[pos];
+        if (!commentLine.empty() && commentLine[0] == '#') {
+          break;
+        }
+        if (!commentStarted) {
+          if (commentLine.empty()) {
+            pos++;
+            continue;
+          }
+          buffer = commentLine;
+          commentStarted = true;
+        } else {
+          buffer += '\n';
+          buffer += commentLine;
+        }
+        pos++;
       }
+      commentBuffer = buffer;
+      idx = pos;
+      continue;
+    }
+    if (curLine == "# Sound Chips") {
+      size_t pos = idx + 1;
+      ParsedSystem current;
+      bool haveSystem = false;
+      while (pos < lines.size()) {
+        std::string entryLine = lines[pos];
+        if (!entryLine.empty() && entryLine[0] == '#') {
+          break;
+        }
+        if (entryLine.empty()) {
+          pos++;
+          continue;
+        }
+        if (entryLine.rfind("- ", 0) == 0) {
+          if (haveSystem) {
+            parsedSystems.push_back(current);
+          }
+          current = ParsedSystem();
+          haveSystem = true;
+          pos++;
+          continue;
+        }
+        if (!haveSystem) {
+          pos++;
+          continue;
+        }
+        if (entryLine.rfind("  - ", 0) == 0) {
+          std::string entry = entryLine.substr(4);
+          size_t colon = entry.find(':');
+          if (colon == std::string::npos) {
+            pos++;
+            continue;
+          }
+          std::string key = entry.substr(0, colon);
+          std::string value = entry.substr(colon + 1);
+          trimInPlace(key);
+          trimInPlace(value);
+          if (key == "id") {
+            int idVal = 0;
+            if (parseIntFromString(value, 16, idVal)) {
+              current.id = (DivSystem)(idVal & 0xff);
+            }
+          } else if (key == "volume") {
+            double parsed = 0.0;
+            if (parseDoubleFromString(value, parsed)) {
+              current.volume = parsed;
+            }
+          } else if (key == "panning") {
+            double parsed = 0.0;
+            if (parseDoubleFromString(value, parsed)) {
+              current.pan = parsed;
+            }
+          } else if (key == "front/rear") {
+            double parsed = 0.0;
+            if (parseDoubleFromString(value, parsed)) {
+              current.frontRear = parsed;
+            }
+          } else if (key == "flags") {
+            pos++;
+            while (pos < lines.size() && lines[pos].empty()) {
+              pos++;
+            }
+            if (pos < lines.size() && lines[pos] == "```") {
+              pos++;
+              String flags;
+              bool firstFlagLine = true;
+              while (pos < lines.size() && lines[pos] != "```") {
+                if (!firstFlagLine) {
+                  flags += '\n';
+                }
+                flags += lines[pos];
+                firstFlagLine = false;
+                pos++;
+              }
+              current.flags = flags;
+              if (pos < lines.size() && lines[pos] == "```") {
+                pos++;
+              }
+              continue;
+            }
+          }
+        }
+        pos++;
+      }
+      if (haveSystem) {
+        parsedSystems.push_back(current);
+      }
+      idx = pos;
+      continue;
+    }
+    idx++;
+  }
+
+  std::vector<ParsedSystem> validSystems;
+  validSystems.reserve(parsedSystems.size());
+  for (const ParsedSystem& sys : parsedSystems) {
+    if (sys.id != DIV_SYSTEM_NULL) {
+      validSystems.push_back(sys);
     }
   }
 
-  if (!foundSongInfo)
-  {
+  if (!foundSongInfo) {
     lastError = _("not a Furnace text export");
     return false;
   }
 
-  if (e->isPlaying())
-  {
+  if (e->isPlaying()) {
     stop();
   }
 
   e->createNewFromDefaults();
+
+  if (!validSystems.empty()) {
+    e->lockEngine([this, &validSystems]() {
+      int count = 0;
+      for (int i = 0; i < DIV_MAX_CHIPS; i++) {
+        e->song.system[i] = DIV_SYSTEM_NULL;
+        e->song.systemVol[i] = 1.0f;
+        e->song.systemPan[i] = 0.0f;
+        e->song.systemPanFR[i] = 0.0f;
+        e->song.systemFlags[i].clear();
+      }
+      for (const ParsedSystem& sys : validSystems) {
+        if (sys.id == DIV_SYSTEM_NULL) {
+          continue;
+        }
+        if (count >= DIV_MAX_CHIPS) {
+          break;
+        }
+        e->song.system[count] = sys.id;
+        e->song.systemVol[count] = (float)sys.volume;
+        e->song.systemPan[count] = (float)sys.pan;
+        e->song.systemPanFR[count] = (float)sys.frontRear;
+        e->song.systemFlags[count].clear();
+        if (!sys.flags.empty()) {
+          e->song.systemFlags[count].loadFromMemory(sys.flags.c_str());
+        }
+        count++;
+      }
+      e->song.systemLen = count;
+    });
+  }
+
   undoHist.clear();
   redoHist.clear();
   curFileName = "";
@@ -3357,16 +3501,21 @@ bool FurnaceGUI::importSongFromText(const String &path)
   cursor = SelectionPoint();
   updateScroll(0);
 
-  if (!songName.empty())
+  if (!songName.empty()) {
     e->song.name = songName;
-  if (!author.empty())
+  }
+  if (!author.empty()) {
     e->song.author = author;
-  if (!album.empty())
+  }
+  if (!album.empty()) {
     e->song.category = album;
-  if (!systemName.empty())
+  }
+  if (!systemName.empty()) {
     e->song.systemName = systemName;
-  if (tuningSet)
+  }
+  if (tuningSet) {
     e->song.tuning = parsedTuning;
+  }
   e->song.notes = commentBuffer;
 
   updateROMExportAvail();
@@ -3375,6 +3524,7 @@ bool FurnaceGUI::importSongFromText(const String &path)
   lastError = _("everything OK");
   return true;
 }
+
 
 void FurnaceGUI::openRecentFile(String path)
 {
