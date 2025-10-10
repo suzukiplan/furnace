@@ -43,6 +43,8 @@
 #include <sstream>
 #include <cctype>
 #include <vector>
+#include <map>
+#include <algorithm>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -3258,6 +3260,34 @@ bool FurnaceGUI::importSongFromText(const String& path) {
       flags() {}
   };
 
+  struct ParsedPatternCell {
+    int note = 0;
+    int octave = 0;
+    int instrument = -1;
+    int volume = -1;
+    std::vector<int> effects;
+    std::vector<int> effectValues;
+  };
+
+  struct ParsedChannelPatterns {
+    int effectCols = 0;
+    std::map<int, std::vector<ParsedPatternCell>> patterns;
+  };
+
+  struct ParsedSubSong {
+    int index = 0;
+    String name;
+    double tickRate = 60.0;
+    DivGroovePattern speeds;
+    short virtualTempoN = 150;
+    short virtualTempoD = 150;
+    int timeBase = 0;
+    int patLen = 64;
+    int channelCount = 0;
+    std::vector<std::vector<int>> orders;
+    std::vector<ParsedChannelPatterns> channelData;
+  };
+
   String songName;
   String author;
   String album;
@@ -3267,6 +3297,7 @@ bool FurnaceGUI::importSongFromText(const String& path) {
   bool tuningSet = false;
   bool foundSongInfo = false;
   std::vector<ParsedSystem> parsedSystems;
+  std::vector<ParsedSubSong> parsedSubsongs;
 
   size_t idx = 0;
   while (idx < lines.size()) {
@@ -3433,6 +3464,461 @@ bool FurnaceGUI::importSongFromText(const String& path) {
       idx = pos;
       continue;
     }
+    if (curLine == "# Subsongs") {
+      size_t pos = idx + 1;
+      static const char* noteNames[12] = {"C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "B-"};
+      static const char* noteNamesNeg[12] = {"c_", "c+", "d_", "d+", "e_", "f_", "f+", "g_", "g+", "a_", "a+", "b_"};
+
+      auto parseNoteToken = [&](const std::string& token, int& outNote, int& outOctave) -> bool {
+        std::string trimmed = token;
+        trimInPlace(trimmed);
+        if (trimmed == "...") {
+          outNote = 0;
+          outOctave = 0;
+          return true;
+        }
+        if (trimmed == "OFF") {
+          outNote = 100;
+          outOctave = 0;
+          return true;
+        }
+        if (trimmed == "===") {
+          outNote = 101;
+          outOctave = 0;
+          return true;
+        }
+        if (trimmed == "REL") {
+          outNote = 102;
+          outOctave = 0;
+          return true;
+        }
+        if (trimmed.size() < 3) {
+          return false;
+        }
+        bool negative = std::islower(static_cast<unsigned char>(trimmed[0])) != 0;
+        std::string notePart = trimmed.substr(0, 2);
+        std::string octavePart = trimmed.substr(2);
+        trimInPlace(octavePart);
+        if (octavePart.empty()) {
+          return false;
+        }
+        int octaveVal = 0;
+        if (!parseIntFromString(octavePart, 10, octaveVal)) {
+          return false;
+        }
+        if (negative) {
+          octaveVal = -octaveVal;
+        }
+        const char** table = negative ? noteNamesNeg : noteNames;
+        int noteIdx = -1;
+        for (int i = 0; i < 12; i++) {
+          if (notePart == table[i]) {
+            noteIdx = i;
+            break;
+          }
+        }
+        if (noteIdx < 0) {
+          return false;
+        }
+        outNote = noteIdx + 1;
+        outOctave = octaveVal;
+        return true;
+      };
+
+      auto ensurePatternRows = [](ParsedChannelPatterns& channel, int patternIdx, int patLen) -> std::vector<ParsedPatternCell>& {
+        auto& vec = channel.patterns[patternIdx];
+        if ((int)vec.size() < patLen) {
+          vec.resize(patLen);
+        }
+        return vec;
+      };
+
+      while (pos < lines.size()) {
+        std::string header = lines[pos];
+        if (header.empty()) {
+          pos++;
+          continue;
+        }
+        if (header.rfind("# ", 0) == 0 && header.rfind("## ", 0) != 0) {
+          break;
+        }
+        if (header.rfind("## ", 0) == 0) {
+          ParsedSubSong sub;
+          size_t colon = header.find(':');
+          if (colon != std::string::npos) {
+            std::string idxStr = header.substr(3, colon - 3);
+            trimInPlace(idxStr);
+            parseIntFromString(idxStr, 10, sub.index);
+            std::string nameStr = header.substr(colon + 1);
+            trimInPlace(nameStr);
+            sub.name = nameStr;
+          } else {
+            std::string idxStr = header.substr(3);
+            trimInPlace(idxStr);
+            parseIntFromString(idxStr, 10, sub.index);
+          }
+          pos++;
+
+          while (pos < lines.size()) {
+            std::string lineSub = lines[pos];
+            if (lineSub.empty()) {
+              pos++;
+              continue;
+            }
+            if (lineSub.rfind("## ", 0) == 0 || (lineSub.size() > 0 && lineSub[0] == '#')) {
+              break;
+            }
+
+            if (lineSub.rfind("- tick rate:", 0) == 0) {
+              std::string value = lineSub.substr(strlen("- tick rate:"));
+              trimInPlace(value);
+              double parsed = 0.0;
+              if (parseDoubleFromString(value, parsed)) {
+                sub.tickRate = parsed;
+              }
+              pos++;
+              continue;
+            }
+            if (lineSub.rfind("- speeds:", 0) == 0) {
+              std::string value = lineSub.substr(strlen("- speeds:"));
+              trimInPlace(value);
+              std::istringstream sp(value);
+              int token = 0;
+              unsigned char len = 0;
+              while (sp >> token && len < 16) {
+                sub.speeds.val[len++] = (unsigned char)token;
+              }
+              if (len == 0) {
+                sub.speeds.val[0] = 6;
+                len = 1;
+              }
+              sub.speeds.len = len;
+              pos++;
+              continue;
+            }
+            if (lineSub.rfind("- virtual tempo:", 0) == 0) {
+              std::string value = lineSub.substr(strlen("- virtual tempo:"));
+              trimInPlace(value);
+              size_t slash = value.find('/');
+              if (slash != std::string::npos) {
+                std::string numStr = value.substr(0, slash);
+                std::string denStr = value.substr(slash + 1);
+                trimInPlace(numStr);
+                trimInPlace(denStr);
+                int num = 0;
+                int den = 0;
+                if (parseIntFromString(numStr, 10, num)) {
+                  sub.virtualTempoN = num;
+                }
+                if (parseIntFromString(denStr, 10, den)) {
+                  sub.virtualTempoD = den;
+                }
+              }
+              pos++;
+              continue;
+            }
+            if (lineSub.rfind("- time base:", 0) == 0) {
+              std::string value = lineSub.substr(strlen("- time base:"));
+              trimInPlace(value);
+              int tb = 0;
+              if (parseIntFromString(value, 10, tb)) {
+                sub.timeBase = tb;
+              }
+              pos++;
+              continue;
+            }
+            if (lineSub.rfind("- pattern length:", 0) == 0) {
+              std::string value = lineSub.substr(strlen("- pattern length:"));
+              trimInPlace(value);
+              int pl = 0;
+              if (parseIntFromString(value, 10, pl)) {
+                sub.patLen = pl;
+              }
+              pos++;
+              continue;
+            }
+            if (lineSub == "orders:") {
+              pos++;
+              while (pos < lines.size() && lines[pos].empty()) {
+                pos++;
+              }
+              if (pos < lines.size() && lines[pos] == "```") {
+                pos++;
+                while (pos < lines.size() && lines[pos] != "```") {
+                  std::string orderLine = lines[pos];
+                  pos++;
+                  if (orderLine.empty()) {
+                    continue;
+                  }
+                  size_t sep = orderLine.find('|');
+                  if (sep == std::string::npos) {
+                    continue;
+                  }
+                  std::string orderTokens = orderLine.substr(sep + 1);
+                  std::istringstream ordStream(orderTokens);
+                  std::vector<int> columnVals;
+                  std::string tok;
+                  while (ordStream >> tok) {
+                    trimInPlace(tok);
+                    if (tok.empty()) {
+                      continue;
+                    }
+                    int val = 0;
+                    if (!parseIntFromString(tok, 16, val)) {
+                      val = 0;
+                    }
+                    columnVals.push_back(val & 0xff);
+                  }
+                  if (columnVals.empty()) {
+                    continue;
+                  }
+                  if (sub.orders.empty()) {
+                    sub.channelCount = (int)columnVals.size();
+                    sub.orders.resize(sub.channelCount);
+                  }
+                  size_t useCh = std::min(columnVals.size(), sub.orders.size());
+                  for (size_t ch = 0; ch < useCh; ch++) {
+                    sub.orders[ch].push_back(columnVals[ch] & 0xff);
+                  }
+                }
+                if (pos < lines.size() && lines[pos] == "```") {
+                  pos++;
+                }
+              }
+              continue;
+            }
+            if (lineSub == "## Patterns") {
+              pos++;
+              if (sub.channelCount == 0) {
+                while (pos < lines.size() && lines[pos].empty()) {
+                  pos++;
+                }
+                int inferredChannels = 0;
+                size_t scanPos = pos;
+                while (scanPos < lines.size()) {
+                  std::string peekLine = lines[scanPos];
+                  if (peekLine.empty()) {
+                    scanPos++;
+                    continue;
+                  }
+                  if (peekLine.rfind("----- ORDER ", 0) != 0) {
+                    break;
+                  }
+                  scanPos++;
+                  while (scanPos < lines.size() && lines[scanPos].empty()) {
+                    scanPos++;
+                  }
+                  if (scanPos >= lines.size()) {
+                    break;
+                  }
+                  std::string rowLine = lines[scanPos];
+                  size_t tmpCursor = 2;
+                  if (rowLine.size() > 2 && rowLine[2] == ' ') tmpCursor++;
+                  int localChannels = 0;
+                  while (tmpCursor < rowLine.size()) {
+                    if (rowLine[tmpCursor] != '|') break;
+                    tmpCursor++;
+                    if (tmpCursor + 3 >= rowLine.size()) break;
+                    tmpCursor += 4;
+                    if (tmpCursor + 2 > rowLine.size()) break;
+                    tmpCursor += 3;
+                    if (tmpCursor + 1 > rowLine.size()) break;
+                    tmpCursor += 2;
+                    while (tmpCursor < rowLine.size() && rowLine[tmpCursor] == ' ') {
+                      tmpCursor++;
+                      if (tmpCursor + 1 >= rowLine.size()) break;
+                      tmpCursor += 4;
+                    }
+                    localChannels++;
+                  }
+                  if (localChannels > inferredChannels) {
+                    inferredChannels = localChannels;
+                  }
+                  break;
+                }
+                sub.channelCount = inferredChannels;
+              }
+              if (sub.channelCount <= 0) {
+                sub.channelCount = (int)sub.orders.size();
+              }
+              if (sub.channelCount <= 0) {
+                sub.channelCount = 0;
+              }
+              sub.channelData.resize(sub.channelCount);
+
+              while (pos < lines.size()) {
+                std::string patLine = lines[pos];
+                if (patLine.empty()) {
+                  pos++;
+                  continue;
+                }
+                if (patLine.rfind("----- ORDER ", 0) != 0) {
+                  if (patLine.rfind("## ", 0) == 0 || (patLine.size() > 0 && patLine[0] == '#')) {
+                    break;
+                  }
+                  pos++;
+                  continue;
+                }
+                std::string orderIdxStr = patLine.substr(strlen("----- ORDER "));
+                trimInPlace(orderIdxStr);
+                int orderIndex = 0;
+                parseIntFromString(orderIdxStr, 16, orderIndex);
+                pos++;
+
+                while (pos < lines.size()) {
+                  std::string rowLine = lines[pos];
+                  if (rowLine.empty()) {
+                    pos++;
+                    continue;
+                  }
+                  if (rowLine.rfind("----- ORDER ", 0) == 0 || (rowLine.size() > 0 && rowLine[0] == '#')) {
+                    break;
+                  }
+                  if (rowLine.size() < 2) {
+                    pos++;
+                    continue;
+                  }
+                  std::string rowIdxStr = rowLine.substr(0, 2);
+                  int rowIndex = 0;
+                  if (!parseIntFromString(rowIdxStr, 16, rowIndex)) {
+                    pos++;
+                    continue;
+                  }
+                  size_t cursor = 2;
+                  if (cursor < rowLine.size() && rowLine[cursor] == ' ') {
+                    cursor++;
+                  }
+                  if (rowIndex < 0) {
+                    pos++;
+                    continue;
+                  }
+                  ParsedPatternCell defaultCell;
+                  defaultCell.instrument = -1;
+                  defaultCell.volume = -1;
+
+                  for (int ch = 0; ch < sub.channelCount; ch++) {
+                    if (cursor >= rowLine.size() || rowLine[cursor] != '|') {
+                      break;
+                    }
+                    cursor++;
+                    if (cursor + 3 >= rowLine.size()) {
+                      break;
+                    }
+                    std::string noteToken = rowLine.substr(cursor, 4);
+                    cursor += 4;
+                    trimInPlace(noteToken);
+                    ParsedPatternCell cell = defaultCell;
+                    int parsedNote = 0;
+                    int parsedOctave = 0;
+                    if (parseNoteToken(noteToken, parsedNote, parsedOctave)) {
+                      cell.note = parsedNote;
+                      cell.octave = parsedOctave;
+                    }
+
+                    if (cursor + 2 >= rowLine.size()) {
+                      break;
+                    }
+                    std::string instToken = rowLine.substr(cursor, 3);
+                    cursor += 3;
+                    trimInPlace(instToken);
+                    if (!instToken.empty() && instToken != ".." && instToken != "--") {
+                      int instVal = 0;
+                      if (parseIntFromString(instToken, 16, instVal)) {
+                        cell.instrument = instVal & 0xff;
+                      } else {
+                        cell.instrument = 0;
+                      }
+                    }
+
+                    if (cursor + 1 >= rowLine.size()) {
+                      break;
+                    }
+                    std::string volToken = rowLine.substr(cursor, 2);
+                    cursor += 2;
+                    trimInPlace(volToken);
+                    if (!volToken.empty() && volToken != ".." && volToken != "--") {
+                      int volVal = 0;
+                      if (parseIntFromString(volToken, 16, volVal)) {
+                        cell.volume = volVal & 0xff;
+                      } else {
+                        cell.volume = 0;
+                      }
+                    }
+
+                    cell.effects.clear();
+                    cell.effectValues.clear();
+                    while (cursor < rowLine.size()) {
+                      if (rowLine[cursor] != ' ') {
+                        break;
+                      }
+                      cursor++;
+                      if (cursor + 1 >= rowLine.size()) {
+                        break;
+                      }
+                      std::string effCode = rowLine.substr(cursor, 2);
+                      cursor += 2;
+                      trimInPlace(effCode);
+                      if (cursor + 1 >= rowLine.size()) {
+                        break;
+                      }
+                      std::string effVal = rowLine.substr(cursor, 2);
+                      cursor += 2;
+                      trimInPlace(effVal);
+
+                      int code = -1;
+                      int value = -1;
+                      if (!effCode.empty() && effCode != ".." && effCode != "--") {
+                        parseIntFromString(effCode, 16, code);
+                        code &= 0xff;
+                      }
+                      if (!effVal.empty() && effVal != ".." && effVal != "--") {
+                        parseIntFromString(effVal, 16, value);
+                        value &= 0xff;
+                      }
+                      cell.effects.push_back(code);
+                      cell.effectValues.push_back(value);
+                    }
+
+                    int patternIdx = -1;
+                    if (ch < (int)sub.orders.size() && orderIndex < (int)sub.orders[ch].size()) {
+                      patternIdx = sub.orders[ch][orderIndex] & 0xff;
+                    }
+                    if (patternIdx < 0) {
+                      patternIdx = orderIndex & 0xff;
+                    }
+
+                    ParsedChannelPatterns& channel = sub.channelData[ch];
+                    auto& rows = ensurePatternRows(channel, patternIdx, sub.patLen);
+                    if (rowIndex >= 0 && rowIndex < sub.patLen) {
+                      rows[rowIndex] = cell;
+                    }
+                    if ((int)cell.effects.size() > channel.effectCols) {
+                      channel.effectCols = (int)cell.effects.size();
+                    }
+                    while (cursor < rowLine.size() && rowLine[cursor] == ' ') {
+                      cursor++;
+                    }
+                  }
+                  pos++;
+                }
+              }
+              continue;
+            }
+
+            pos++;
+          }
+
+          if (sub.channelCount == 0) {
+            sub.channelCount = (int)sub.orders.size();
+          }
+          parsedSubsongs.push_back(std::move(sub));
+          continue;
+        }
+        pos++;
+      }
+      idx = pos;
+      continue;
+    }
     idx++;
   }
 
@@ -3521,6 +4007,140 @@ bool FurnaceGUI::importSongFromText(const String& path) {
         }
       });
     }
+  }
+
+  if (!parsedSubsongs.empty()) {
+    e->lockEngine([this, &parsedSubsongs]() {
+      size_t desired = parsedSubsongs.size();
+      while (e->song.subsong.size() > desired) {
+        DivSubSong* extra = e->song.subsong.back();
+        if (extra != NULL) {
+          extra->clearData();
+          delete extra;
+        }
+        e->song.subsong.pop_back();
+      }
+      while (e->song.subsong.size() < desired) {
+        e->song.subsong.push_back(new DivSubSong);
+      }
+
+      int engineChans = 0;
+      for (int i = 0; i < e->song.systemLen; i++) {
+        engineChans += e->getChannelCount(e->song.system[i]);
+      }
+      if (engineChans <= 0) engineChans = 1;
+
+      for (size_t si = 0; si < parsedSubsongs.size(); si++) {
+        const ParsedSubSong& src = parsedSubsongs[si];
+        DivSubSong* dst = e->song.subsong[si];
+        dst->clearData();
+        dst->name = src.name;
+        dst->hz = src.tickRate;
+
+        unsigned char speedLen = src.speeds.len;
+        if (speedLen == 0) speedLen = 1;
+        if (speedLen > 16) speedLen = 16;
+        dst->speeds.len = speedLen;
+        for (int j = 0; j < 16; j++) {
+          if (j < speedLen) {
+            dst->speeds.val[j] = src.speeds.val[j];
+          } else {
+            dst->speeds.val[j] = 6;
+          }
+        }
+
+        dst->virtualTempoN = src.virtualTempoN;
+        dst->virtualTempoD = src.virtualTempoD;
+        dst->timeBase = src.timeBase;
+
+        int patLen = src.patLen;
+        if (patLen < 1) patLen = 1;
+#ifdef DIV_MAX_ROWS
+        if (patLen > DIV_MAX_ROWS) patLen = DIV_MAX_ROWS;
+#endif
+        dst->patLen = patLen;
+
+        int orderCount = 0;
+        for (const auto& ord : src.orders) {
+          orderCount = std::max(orderCount, (int)ord.size());
+        }
+        if (orderCount <= 0) orderCount = 1;
+#ifdef DIV_MAX_PATTERNS
+        if (orderCount > DIV_MAX_PATTERNS) orderCount = DIV_MAX_PATTERNS;
+#endif
+        dst->ordersLen = orderCount;
+
+        int channelLimit = engineChans;
+        if (src.channelCount > 0) {
+          channelLimit = std::min(channelLimit, src.channelCount);
+        }
+
+        for (int ch = 0; ch < channelLimit; ch++) {
+          const std::vector<int>* srcOrders = (ch < (int)src.orders.size()) ? &src.orders[ch] : NULL;
+          for (int ord = 0; ord < orderCount; ord++) {
+            int val = 0;
+            if (srcOrders != NULL && ord < (int)srcOrders->size()) {
+              val = (*srcOrders)[ord] & 0xff;
+            }
+            dst->orders.ord[ch][ord] = (unsigned char)val;
+          }
+        }
+        for (int ch = channelLimit; ch < DIV_MAX_CHANS; ch++) {
+          for (int ord = 0; ord < orderCount; ord++) {
+            dst->orders.ord[ch][ord] = 0;
+          }
+          dst->pat[ch].effectCols = 0;
+        }
+
+        for (int ch = 0; ch < channelLimit; ch++) {
+          int effectCols = 0;
+          if (ch < (int)src.channelData.size()) {
+            effectCols = src.channelData[ch].effectCols;
+          }
+#ifdef DIV_MAX_EFFECT_COLS
+          if (effectCols > DIV_MAX_EFFECT_COLS) effectCols = DIV_MAX_EFFECT_COLS;
+#endif
+          if (effectCols < 0) effectCols = 0;
+          dst->pat[ch].effectCols = effectCols;
+
+          if (ch >= (int)src.channelData.size()) {
+            continue;
+          }
+
+          const ParsedChannelPatterns& parsedChannel = src.channelData[ch];
+
+          for (const auto& patPair : parsedChannel.patterns) {
+            int patIdx = patPair.first;
+            if (patIdx < 0) continue;
+#ifdef DIV_MAX_PATTERNS
+            if (patIdx >= DIV_MAX_PATTERNS) continue;
+#endif
+            DivPattern* pat = dst->pat[ch].getPattern(patIdx, true);
+            pat->clear();
+            const std::vector<ParsedPatternCell>& rows = patPair.second;
+            for (int row = 0; row < patLen && row < (int)rows.size(); row++) {
+              const ParsedPatternCell& cell = rows[row];
+              pat->data[row][0] = cell.note;
+              pat->data[row][1] = cell.octave;
+              pat->data[row][2] = cell.instrument;
+              pat->data[row][3] = cell.volume;
+              for (int eff = 0; eff < effectCols; eff++) {
+                int code = -1;
+                int value = -1;
+                if (eff < (int)cell.effects.size()) {
+                  code = cell.effects[eff];
+                }
+                if (eff < (int)cell.effectValues.size()) {
+                  value = cell.effectValues[eff];
+                }
+                pat->data[row][4 + eff * 2] = code;
+                pat->data[row][5 + eff * 2] = value;
+              }
+            }
+          }
+        }
+      }
+    });
   }
 
   undoHist.clear();
