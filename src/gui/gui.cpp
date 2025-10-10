@@ -3951,6 +3951,25 @@ bool FurnaceGUI::importSongFromText(const String& path) {
           if (sub.channelCount == 0) {
             sub.channelCount = (int)sub.orders.size();
           }
+
+          logI("importSongFromText summary subsong=%d channels=%d patLen=%d", sub.index, sub.channelCount, sub.patLen);
+          for (size_t ch = 0; ch < sub.orders.size(); ch++) {
+            std::ostringstream ordStream;
+            ordStream << "orders:";
+            for (size_t ordIdx = 0; ordIdx < sub.orders[ch].size(); ordIdx++) {
+              ordStream << ' ' << fmt::sprintf("%.2X", sub.orders[ch][ordIdx] & 0xff);
+            }
+            logI("  ch%zu %s", ch, ordStream.str().c_str());
+          }
+          for (size_t ch = 0; ch < sub.channelData.size(); ch++) {
+            const ParsedChannelPatterns& channel = sub.channelData[ch];
+            logI("  ch%zu effectCols=%d patterns=%zu", ch, channel.effectCols, channel.patterns.size());
+            for (const auto& patPair : channel.patterns) {
+              int patIdx = patPair.first;
+              logI("    pattern %02X rows=%zu", patIdx & 0xff, patPair.second.size());
+            }
+          }
+
           parsedSubsongs.push_back(std::move(sub));
           continue;
         }
@@ -4115,7 +4134,12 @@ bool FurnaceGUI::importSongFromText(const String& path) {
           channelLimit = std::min(channelLimit, src.channelCount);
         }
 
+        logI("importSongFromText apply subsong=%zu orderCount=%d channelLimit=%d", si, orderCount, channelLimit);
+
         for (int ch = 0; ch < channelLimit; ch++) {
+          dst->chanShow[ch] = true;
+          dst->chanShowChanOsc[ch] = true;
+          dst->chanCollapse[ch] = 0;
           const std::vector<int>* srcOrders = (ch < (int)src.orders.size()) ? &src.orders[ch] : NULL;
           for (int ord = 0; ord < orderCount; ord++) {
             int val = 0;
@@ -4130,6 +4154,9 @@ bool FurnaceGUI::importSongFromText(const String& path) {
             dst->orders.ord[ch][ord] = 0;
           }
           dst->pat[ch].effectCols = 0;
+          dst->chanShow[ch] = false;
+          dst->chanShowChanOsc[ch] = false;
+          dst->chanCollapse[ch] = 0;
         }
 
         for (int ch = 0; ch < channelLimit; ch++) {
@@ -4148,6 +4175,7 @@ bool FurnaceGUI::importSongFromText(const String& path) {
           }
 
           const ParsedChannelPatterns& parsedChannel = src.channelData[ch];
+          logI("  apply ch=%d effectCols=%d patternCount=%zu", ch, effectCols, parsedChannel.patterns.size());
 
           for (const auto& patPair : parsedChannel.patterns) {
             int patIdx = patPair.first;
@@ -4158,12 +4186,14 @@ bool FurnaceGUI::importSongFromText(const String& path) {
             DivPattern* pat = dst->pat[ch].getPattern(patIdx, true);
             pat->clear();
             const std::vector<ParsedPatternCell>& rows = patPair.second;
+            logI("    apply pattern %02X rows=%zu", patIdx & 0xff, rows.size());
             for (int row = 0; row < patLen && row < (int)rows.size(); row++) {
               const ParsedPatternCell& cell = rows[row];
               pat->data[row][0] = cell.note;
               pat->data[row][1] = cell.octave;
               pat->data[row][2] = cell.instrument;
               pat->data[row][3] = cell.volume;
+              logI("      row %02d note=%d oct=%d inst=%d vol=%d effCols=%d", row, cell.note, cell.octave, cell.instrument, cell.volume, (int)cell.effects.size());
               for (int eff = 0; eff < effectCols; eff++) {
                 int code = -1;
                 int value = -1;
