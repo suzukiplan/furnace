@@ -4598,6 +4598,13 @@ bool FurnaceGUI::loop() {
           if (ImGui::MenuItem(_("export..."),BIND_FOR(GUI_ACTION_EXPORT))) {
             displayExport=true;
           }
+          if (ImGui::MenuItem(_("import.."))) {
+            if (modified) {
+              showWarning(_("Unsaved changes! Save changes before importing another file?"),GUI_WARN_OPEN);
+            } else {
+              openFileDialog(GUI_FILE_OPEN);
+            }
+          }
         }
         ImGui::Separator();
         if (!settings.classicChipOptions) {
