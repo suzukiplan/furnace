@@ -3456,34 +3456,71 @@ bool FurnaceGUI::importSongFromText(const String& path) {
   e->createNewFromDefaults();
 
   if (!validSystems.empty()) {
-    e->lockEngine([this, &validSystems]() {
-      int count = 0;
-      for (int i = 0; i < DIV_MAX_CHIPS; i++) {
-        e->song.system[i] = DIV_SYSTEM_NULL;
-        e->song.systemVol[i] = 1.0f;
-        e->song.systemPan[i] = 0.0f;
-        e->song.systemPanFR[i] = 0.0f;
-        e->song.systemFlags[i].clear();
+    while (e->song.systemLen > 1) {
+      if (!e->removeSystem(e->song.systemLen - 1, true)) {
+        break;
       }
-      for (const ParsedSystem& sys : validSystems) {
-        if (sys.id == DIV_SYSTEM_NULL) {
-          continue;
+    }
+
+    size_t nextIdx = 0;
+    if (!validSystems.empty()) {
+      const ParsedSystem& firstSys = validSystems[0];
+      bool appliedFirst = false;
+      if (e->song.systemLen >= 1) {
+        if (e->changeSystem(0, firstSys.id, true)) {
+          e->lockEngine([this, firstSys]() {
+            e->song.systemVol[0] = (float)firstSys.volume;
+            e->song.systemPan[0] = (float)firstSys.pan;
+            e->song.systemPanFR[0] = (float)firstSys.frontRear;
+            e->song.systemFlags[0].clear();
+            if (!firstSys.flags.empty()) {
+              e->song.systemFlags[0].loadFromMemory(firstSys.flags.c_str());
+            }
+          });
+          appliedFirst = true;
         }
-        if (count >= DIV_MAX_CHIPS) {
-          break;
-        }
-        e->song.system[count] = sys.id;
-        e->song.systemVol[count] = (float)sys.volume;
-        e->song.systemPan[count] = (float)sys.pan;
-        e->song.systemPanFR[count] = (float)sys.frontRear;
-        e->song.systemFlags[count].clear();
-        if (!sys.flags.empty()) {
-          e->song.systemFlags[count].loadFromMemory(sys.flags.c_str());
-        }
-        count++;
       }
-      e->song.systemLen = count;
-    });
+      if (!appliedFirst) {
+        if (e->addSystem(firstSys.id)) {
+          e->lockEngine([this, firstSys]() {
+            int idx = e->song.systemLen - 1;
+            if (idx >= 0 && idx < DIV_MAX_CHIPS) {
+              e->song.systemVol[idx] = (float)firstSys.volume;
+              e->song.systemPan[idx] = (float)firstSys.pan;
+              e->song.systemPanFR[idx] = (float)firstSys.frontRear;
+              e->song.systemFlags[idx].clear();
+              if (!firstSys.flags.empty()) {
+                e->song.systemFlags[idx].loadFromMemory(firstSys.flags.c_str());
+              }
+            }
+          });
+          appliedFirst = true;
+        }
+      }
+      nextIdx = appliedFirst ? 1 : 0;
+    }
+
+    for (size_t i = nextIdx; i < validSystems.size(); i++) {
+      const ParsedSystem& sys = validSystems[i];
+      if (sys.id == DIV_SYSTEM_NULL) {
+        continue;
+      }
+      if (!e->addSystem(sys.id)) {
+        continue;
+      }
+      e->lockEngine([this, sys]() {
+        int idx = e->song.systemLen - 1;
+        if (idx >= 0 && idx < DIV_MAX_CHIPS) {
+          e->song.systemVol[idx] = (float)sys.volume;
+          e->song.systemPan[idx] = (float)sys.pan;
+          e->song.systemPanFR[idx] = (float)sys.frontRear;
+          e->song.systemFlags[idx].clear();
+          if (!sys.flags.empty()) {
+            e->song.systemFlags[idx].loadFromMemory(sys.flags.c_str());
+          }
+        }
+      });
+    }
   }
 
   undoHist.clear();
