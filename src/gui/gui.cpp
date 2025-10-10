@@ -3470,10 +3470,10 @@ bool FurnaceGUI::importSongFromText(const String& path) {
       static const char* noteNamesNeg[12] = {"c_", "c+", "d_", "d+", "e_", "f_", "f+", "g_", "g+", "a_", "a+", "b_"};
 
       auto parseNoteToken = [&](const std::string& token, int& outNote, int& outOctave) -> bool {
-        logD("importSongFromText parseNoteToken token='%s'", token.c_str());
+        logI("importSongFromText parseNoteToken token='%s'", token.c_str());
         std::string trimmed = token;
         trimInPlace(trimmed);
-        if (trimmed == "...") {
+        if (trimmed == "....") {
           outNote = 0;
           outOctave = 0;
           return true;
@@ -3797,32 +3797,42 @@ bool FurnaceGUI::importSongFromText(const String& path) {
                   defaultCell.instrument = -1;
                   defaultCell.volume = -1;
 
-                  for (int ch = 0; ch < sub.channelCount; ch++) {
+                  int parsedChannels = 0;
+                  while (cursor < rowLine.size()) {
+                    while (cursor < rowLine.size() && rowLine[cursor] == ' ') {
+                      cursor++;
+                    }
+                    if (cursor >= rowLine.size() || rowLine[cursor] != '|') {
+                      break;
+                    }
+                    cursor++;
+
+                    if (parsedChannels >= (int)sub.channelData.size()) {
+                      sub.channelData.resize(parsedChannels + 1);
+                    }
+                    if (sub.channelCount < parsedChannels + 1) {
+                      sub.channelCount = parsedChannels + 1;
+                    }
+
                     int patternIdx = -1;
-                    if (ch < (int)sub.orders.size() && orderIndex < (int)sub.orders[ch].size()) {
-                      patternIdx = sub.orders[ch][orderIndex] & 0xff;
+                    if (parsedChannels < (int)sub.orders.size() && orderIndex < (int)sub.orders[parsedChannels].size()) {
+                      patternIdx = sub.orders[parsedChannels][orderIndex] & 0xff;
                     }
                     if (patternIdx < 0) {
                       patternIdx = orderIndex & 0xff;
                     }
 
-                    ParsedChannelPatterns& channel = sub.channelData[ch];
+                    ParsedChannelPatterns& channel = sub.channelData[parsedChannels];
                     auto& rows = ensurePatternRows(channel, patternIdx, sub.patLen);
 
                     ParsedPatternCell cell = defaultCell;
 
-                    if (cursor >= rowLine.size() || rowLine[cursor] != '|') {
-                      if (rowIndex >= 0 && rowIndex < sub.patLen) {
-                        rows[rowIndex] = cell;
-                      }
-                      continue;
-                    }
-                    cursor++;
                     if (cursor + 3 >= rowLine.size()) {
                       if (rowIndex >= 0 && rowIndex < sub.patLen) {
                         rows[rowIndex] = cell;
                       }
                       cursor = rowLine.size();
+                      parsedChannels++;
                       continue;
                     }
                     std::string noteToken = rowLine.substr(cursor, 4);
@@ -3840,6 +3850,7 @@ bool FurnaceGUI::importSongFromText(const String& path) {
                         rows[rowIndex] = cell;
                       }
                       cursor = rowLine.size();
+                      parsedChannels++;
                       continue;
                     }
                     std::string instToken = rowLine.substr(cursor, 3);
@@ -3859,6 +3870,7 @@ bool FurnaceGUI::importSongFromText(const String& path) {
                         rows[rowIndex] = cell;
                       }
                       cursor = rowLine.size();
+                      parsedChannels++;
                       continue;
                     }
                     std::string volToken = rowLine.substr(cursor, 2);
@@ -3913,9 +3925,7 @@ bool FurnaceGUI::importSongFromText(const String& path) {
                     if ((int)cell.effects.size() > channel.effectCols) {
                       channel.effectCols = (int)cell.effects.size();
                     }
-                    while (cursor < rowLine.size() && rowLine[cursor] == ' ') {
-                      cursor++;
-                    }
+                    parsedChannels++;
                   }
                   pos++;
                 }
