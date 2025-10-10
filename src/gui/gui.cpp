@@ -3470,6 +3470,7 @@ bool FurnaceGUI::importSongFromText(const String& path) {
       static const char* noteNamesNeg[12] = {"c_", "c+", "d_", "d+", "e_", "f_", "f+", "g_", "g+", "a_", "a+", "b_"};
 
       auto parseNoteToken = [&](const std::string& token, int& outNote, int& outOctave) -> bool {
+        logD("importSongFromText parseNoteToken token='%s'", token.c_str());
         std::string trimmed = token;
         trimInPlace(trimmed);
         if (trimmed == "...") {
