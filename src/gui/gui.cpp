@@ -3272,6 +3272,7 @@ bool FurnaceGUI::importSongFromText(const String& path) {
   struct ParsedChannelPatterns {
     int effectCols = 0;
     std::map<int, std::vector<ParsedPatternCell>> patterns;
+    std::map<int, int> orderForPattern;
   };
 
   struct ParsedSubSong {
@@ -3937,6 +3938,8 @@ bool FurnaceGUI::importSongFromText(const String& path) {
                     if ((int)cell.effects.size() > channel.effectCols) {
                       channel.effectCols = (int)cell.effects.size();
                     }
+                    // remember the order index this pattern corresponds to
+                    channel.orderForPattern[patternIdx] = orderIndex;
                     parsedChannels++;
                   }
                   pos++;
@@ -4168,6 +4171,7 @@ bool FurnaceGUI::importSongFromText(const String& path) {
           if (effectCols > DIV_MAX_EFFECT_COLS) effectCols = DIV_MAX_EFFECT_COLS;
 #endif
           if (effectCols < 0) effectCols = 0;
+          if (effectCols == 0) effectCols = 1;
           dst->pat[ch].effectCols = effectCols;
 
           if (ch >= (int)src.channelData.size()) {
@@ -4205,6 +4209,14 @@ bool FurnaceGUI::importSongFromText(const String& path) {
                 }
                 pat->data[row][4 + eff * 2] = code;
                 pat->data[row][5 + eff * 2] = value;
+              }
+            }
+            auto ordIt = parsedChannel.orderForPattern.find(patIdx);
+            if (ordIt != parsedChannel.orderForPattern.end()) {
+              int ordIdx = ordIt->second;
+              if (ordIdx >= 0 && ordIdx < dst->ordersLen) {
+                logI("    remap order %02d -> pattern %02X", ordIdx, patIdx & 0xff);
+                dst->orders.ord[ch][ordIdx] = (unsigned char)(patIdx & 0xff);
               }
             }
           }
