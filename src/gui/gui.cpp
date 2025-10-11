@@ -3075,7 +3075,7 @@ bool FurnaceGUI::importSongFromText(const String& path)
             static const char* noteNamesNeg[12] = {"c_", "c+", "d_", "d+", "e_", "f_", "f+", "g_", "g+", "a_", "a+", "b_"};
 
             auto parseNoteToken = [&](const std::string& token, int& outNote, int& outOctave) -> bool {
-                logI("importSongFromText parseNoteToken token='%s'", token.c_str());
+                // logD("importSongFromText parseNoteToken token='%s'", token.c_str());
                 std::string trimmed = token;
                 trimInPlace(trimmed);
                 if (trimmed == "....") {
@@ -3294,7 +3294,7 @@ bool FurnaceGUI::importSongFromText(const String& path)
                             }
                             continue;
                         }
-                        logI("importSongFromText section lineSub='%s'", lineSub.c_str());
+                        // logD("importSongFromText section lineSub='%s'", lineSub.c_str());
                         if (lineSub == "## Patterns") {
                             pos++;
                             continue;
@@ -3364,7 +3364,7 @@ bool FurnaceGUI::importSongFromText(const String& path)
 
                             while (pos < lines.size()) {
                                 std::string patLine = lines[pos];
-                                logI("importSongFromText patLine='%s'", patLine.c_str());
+                                // logD("importSongFromText patLine='%s'", patLine.c_str());
                                 if (patLine.empty()) {
                                     pos++;
                                     continue;
@@ -3384,7 +3384,7 @@ bool FurnaceGUI::importSongFromText(const String& path)
 
                                 while (pos < lines.size()) {
                                     std::string rowLine = lines[pos];
-                                    logI("importSongFromText rowLine='%s'", rowLine.c_str());
+                                    // logD("importSongFromText rowLine='%s'", rowLine.c_str());
                                     if (rowLine.empty()) {
                                         pos++;
                                         continue;
@@ -3465,6 +3465,7 @@ bool FurnaceGUI::importSongFromText(const String& path)
 
                                         if (cursor + 3 >= rowLine.size()) {
                                             if (rowIndex >= 0 && rowIndex < sub.patLen) {
+                                                logD("set cell to rows[%d] (line:%d)", rowIndex, __LINE__);
                                                 rows[rowIndex] = cell;
                                             }
                                             cursor = rowLine.size();
@@ -3477,12 +3478,14 @@ bool FurnaceGUI::importSongFromText(const String& path)
                                         int parsedNote = 0;
                                         int parsedOctave = 0;
                                         if (parseNoteToken(noteToken, parsedNote, parsedOctave)) {
+                                            logD("set cell.note: %d", parsedNote);
                                             cell.note = parsedNote;
                                             cell.octave = parsedOctave;
                                         }
 
                                         if (cursor + 2 >= rowLine.size()) {
                                             if (rowIndex >= 0 && rowIndex < sub.patLen) {
+                                                logD("set cell to rows[%d] (line:%d)", rowIndex, __LINE__);
                                                 rows[rowIndex] = cell;
                                             }
                                             cursor = rowLine.size();
@@ -3503,6 +3506,7 @@ bool FurnaceGUI::importSongFromText(const String& path)
 
                                         if (cursor + 1 >= rowLine.size()) {
                                             if (rowIndex >= 0 && rowIndex < sub.patLen) {
+                                                logD("set cell to rows[%d] (line:%d)", rowIndex, __LINE__);
                                                 rows[rowIndex] = cell;
                                             }
                                             cursor = rowLine.size();
@@ -3556,6 +3560,7 @@ bool FurnaceGUI::importSongFromText(const String& path)
                                         }
 
                                         if (rowIndex >= 0 && rowIndex < sub.patLen) {
+                                            logD("set cell to rows[%d] (line:%d)", rowIndex, __LINE__);
                                             rows[rowIndex] = cell;
                                         }
                                         if ((int)cell.effects.size() > channel.effectCols) {
@@ -3695,6 +3700,7 @@ bool FurnaceGUI::importSongFromText(const String& path)
     }
 
     if (!parsedSubsongs.empty()) {
+        logI("extract parsed subsongs(%zu) to the engine.", parsedSubsongs.size());
         e->lockEngine([this, &parsedSubsongs]() {
             size_t desired = parsedSubsongs.size();
             while (e->song.subsong.size() > desired) {
@@ -3714,6 +3720,7 @@ bool FurnaceGUI::importSongFromText(const String& path)
                 engineChans += e->getChannelCount(e->song.system[i]);
             }
             if (engineChans <= 0) engineChans = 1;
+            // logD("engineChans=%d", engineChans);
 
             for (size_t si = 0; si < parsedSubsongs.size(); si++) {
                 const ParsedSubSong& src = parsedSubsongs[si];
@@ -3802,7 +3809,7 @@ bool FurnaceGUI::importSongFromText(const String& path)
                     }
 
                     const ParsedChannelPatterns& parsedChannel = src.channelData[ch];
-                    logI("  apply ch=%d effectCols=%d patternCount=%zu", ch, effectCols, parsedChannel.patterns.size());
+                    // logD("  apply ch=%d effectCols=%d patternCount=%zu", ch, effectCols, parsedChannel.patterns.size());
 
                     for (const auto& patPair : parsedChannel.patterns) {
                         int patIdx = patPair.first;
@@ -3813,14 +3820,14 @@ bool FurnaceGUI::importSongFromText(const String& path)
                         DivPattern* pat = dst->pat[ch].getPattern(patIdx, true);
                         pat->clear();
                         const std::vector<ParsedPatternCell>& rows = patPair.second;
-                        logI("    apply pattern %02X rows=%zu", patIdx & 0xff, rows.size());
+                        // logD("    apply pattern %02X rows=%zu", patIdx & 0xff, rows.size());
                         for (int row = 0; row < patLen && row < (int)rows.size(); row++) {
                             const ParsedPatternCell& cell = rows[row];
                             pat->data[row][0] = cell.note;
                             pat->data[row][1] = cell.octave;
                             pat->data[row][2] = cell.instrument;
                             pat->data[row][3] = cell.volume;
-                            logI("      row %02d note=%d oct=%d inst=%d vol=%d effCols=%d", row, cell.note, cell.octave, cell.instrument, cell.volume, (int)cell.effects.size());
+                            // logD("      row %02d note=%d oct=%d inst=%d vol=%d effCols=%d", row, cell.note, cell.octave, cell.instrument, cell.volume, (int)cell.effects.size());
                             for (int eff = 0; eff < effectCols; eff++) {
                                 int code = -1;
                                 int value = -1;
@@ -3838,7 +3845,7 @@ bool FurnaceGUI::importSongFromText(const String& path)
                         if (ordIt != parsedChannel.orderForPattern.end()) {
                             int ordIdx = ordIt->second;
                             if (ordIdx >= 0 && ordIdx < dst->ordersLen) {
-                                logI("    remap order %02d -> pattern %02X", ordIdx, patIdx & 0xff);
+                                // logD("    remap order %02d -> pattern %02X", ordIdx, patIdx & 0xff);
                                 dst->orders.ord[ch][ordIdx] = (unsigned char)(patIdx & 0xff);
                             }
                         }
