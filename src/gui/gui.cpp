@@ -3836,9 +3836,28 @@ bool FurnaceGUI::importSongFromText(const String& path) {
                     }
 
                     ParsedChannelPatterns& channel = sub.channelData[parsedChannels];
-                    auto& rows = ensurePatternRows(channel, patternIdx, sub.patLen);
+                    auto remapIt = channel.orderForPattern.find(patternIdx);
+                    if (remapIt != channel.orderForPattern.end() && remapIt->second != orderIndex) {
+                      int candidate = orderIndex & 0xff;
+#ifdef DIV_MAX_PATTERNS
+                      const int maxPatterns = DIV_MAX_PATTERNS;
+#else
+                      const int maxPatterns = 256;
+#endif
+                      int guard = 0;
+                      while (guard < maxPatterns && channel.patterns.count(candidate)) {
+                        candidate = (candidate + 1) & 0xff;
+                        guard++;
+                      }
+                      if (!channel.patterns.count(candidate)) {
+                        if (parsedChannels < (int)sub.orders.size() && orderIndex < (int)sub.orders[parsedChannels].size()) {
+                          sub.orders[parsedChannels][orderIndex] = candidate & 0xff;
+                        }
+                        patternIdx = candidate;
+                      }
+                    }
 
-                    ParsedPatternCell cell = defaultCell;
+                    auto& rows = ensurePatternRows(channel, patternIdx, sub.patLen);
 
                     if (cursor + 3 >= rowLine.size()) {
                       if (rowIndex >= 0 && rowIndex < sub.patLen) {
