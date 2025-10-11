@@ -636,6 +636,7 @@ enum FurnaceGUIFileDialogs {
   GUI_FILE_IMPORT_USER_PRESETS,
   GUI_FILE_IMPORT_USER_PRESETS_REPLACE,
   GUI_FILE_IMPORT_CONFIG,
+  GUI_FILE_IMPORT_TEXT_EXPORT,
   GUI_FILE_EXPORT_COLORS,
   GUI_FILE_EXPORT_KEYBINDS,
   GUI_FILE_EXPORT_LAYOUT,
@@ -667,6 +668,7 @@ enum FurnaceGUIWarnings {
   GUI_WARN_CLEAR_HISTORY,
   GUI_WARN_CV,
   GUI_WARN_RESET_CONFIG,
+  GUI_WARN_IMPORT_TEXT,
   GUI_WARN_IMPORT,
   GUI_WARN_GENERIC
 };
@@ -3102,6 +3104,7 @@ class FurnaceGUI {
   int save(String path, int dmfVersion);
   int load(String path);
   int loadStream(String path);
+  bool importSongFromText(const String& path);
   void openRecentFile(String path);
   void pushRecentFile(String path);
   void pushRecentSys(const char* path);
