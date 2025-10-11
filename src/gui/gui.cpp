@@ -3410,9 +3410,9 @@ bool FurnaceGUI::importSongFromText(const String& path)
                                         pos++;
                                         continue;
                                     }
-                                    ParsedPatternCell defaultCell;
-                                    defaultCell.instrument = -1;
-                                    defaultCell.volume = -1;
+                                    ParsedPatternCell cell;
+                                    cell.instrument = -1;
+                                    cell.volume = -1;
 
                                     int parsedChannels = 0;
                                     while (cursor < rowLine.size()) {
