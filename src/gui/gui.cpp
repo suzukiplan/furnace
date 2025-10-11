@@ -6055,7 +6055,7 @@ bool FurnaceGUI::loop()
                     if (ImGui::MenuItem(_("export..."), BIND_FOR(GUI_ACTION_EXPORT))) {
                         displayExport = true;
                     }
-                    if (ImGui::MenuItem(_("import.."))) {
+                    if (ImGui::MenuItem(_("import text"))) {
                         if (modified) {
                             showWarning(_("Unsaved changes! Save changes before importing a text export?"), GUI_WARN_IMPORT_TEXT);
                         } else {
