@@ -1958,7 +1958,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("Furnace instrument"), "*.fui"},
         workingDirIns,
         dpiScale,
-        (settings.autoFillSave)?e->getIns(curIns)->name:""
+        e->getIns(curIns)->name
       );
       break;
     case GUI_FILE_INS_SAVE_DMP:
@@ -1968,7 +1968,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("DefleMask preset"), "*.dmp"},
         workingDirIns,
         dpiScale,
-        (settings.autoFillSave)?e->getIns(curIns)->name:""
+        e->getIns(curIns)->name
       );
       break;
     case GUI_FILE_INS_SAVE_ALL:
@@ -2056,7 +2056,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("Wave file"), "*.wav"},
         workingDirSample,
         dpiScale,
-        (settings.autoFillSave)?e->getSample(curSample)->name:""
+        e->getSample(curSample)->name
       );
       break;
     case GUI_FILE_SAMPLE_SAVE_RAW:
@@ -2066,7 +2066,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("all files"), "*"},
         workingDirSample,
         dpiScale,
-        (settings.autoFillSave)?e->getSample(curSample)->name:""
+        e->getSample(curSample)->name
       );
       break;
     case GUI_FILE_SAMPLE_SAVE_ALL:
