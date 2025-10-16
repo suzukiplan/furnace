@@ -1878,7 +1878,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("DefleMask 1.1.3 module"), "*.dmf"},
         workingDirSong,
         dpiScale,
-        (settings.autoFillSave)?shortName:""
+        shortName.empty()?"":shortName
       );
       break;
     case GUI_FILE_SAVE_DMF_LEGACY:
@@ -1888,7 +1888,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("DefleMask 1.0/legacy module"), "*.dmf"},
         workingDirSong,
         dpiScale,
-        (settings.autoFillSave)?shortName:""
+        shortName.empty()?"":shortName
       );
       break;
     case GUI_FILE_INS_OPEN:
@@ -2084,7 +2084,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("Wave file"), "*.wav"},
         workingDirAudioExport,
         dpiScale,
-        (settings.autoFillSave)?shortName:""
+        shortName.empty()?"":shortName
       );
       break;
     case GUI_FILE_EXPORT_AUDIO_PER_SYS:
@@ -2094,7 +2094,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("Wave file"), "*.wav"},
         workingDirAudioExport,
         dpiScale,
-        (settings.autoFillSave)?shortName:""
+        shortName.empty()?"":shortName
       );
       break;
     case GUI_FILE_EXPORT_AUDIO_PER_CHANNEL:
@@ -2104,7 +2104,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("Wave file"), "*.wav"},
         workingDirAudioExport,
         dpiScale,
-        (settings.autoFillSave)?shortName:""
+        shortName.empty()?"":shortName
       );
       break;
     case GUI_FILE_EXPORT_VGM:
@@ -2114,7 +2114,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("VGM file"), "*.vgm"},
         workingDirVGMExport,
         dpiScale,
-        (settings.autoFillSave)?shortName:""
+        shortName.empty()?"":shortName
       );
       break;
     case GUI_FILE_EXPORT_TEXT:
@@ -2124,7 +2124,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("text file"), "*.txt"},
         workingDirROMExport,
         dpiScale,
-        (settings.autoFillSave)?shortName:""
+        shortName.empty()?"":shortName
       );
       break;
     case GUI_FILE_EXPORT_CMDSTREAM:
@@ -2134,7 +2134,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("binary file"), "*.bin"},
         workingDirROMExport,
         dpiScale,
-        (settings.autoFillSave)?shortName:""
+        shortName.empty()?"":shortName
       );
       break;
     case GUI_FILE_EXPORT_ROM:
@@ -2151,7 +2151,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
           {romFilterName, "*"+romFilterExt},
           workingDirROMExport,
           dpiScale,
-          (settings.autoFillSave)?shortName:""
+          shortName.empty()?"":shortName
         );
       }
       break;
