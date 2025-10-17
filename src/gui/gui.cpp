@@ -1277,7 +1277,27 @@ void FurnaceGUI::play(int row) {
 }
 
 void FurnaceGUI::setOrder(unsigned char order, bool forced) {
+  SelectionPoint previousCursor=cursor;
+  bool hadCollapsedSelection=(
+    !selecting &&
+    selStart.xCoarse==selEnd.xCoarse &&
+    selStart.xFine==selEnd.xFine &&
+    selStart.y==selEnd.y &&
+    selStart.order==selEnd.order &&
+    selStart.xCoarse==previousCursor.xCoarse &&
+    selStart.xFine==previousCursor.xFine &&
+    selStart.y==previousCursor.y &&
+    selStart.order==previousCursor.order
+  );
+
   curOrder=order;
+
+  cursor.order=order;
+  if (hadCollapsedSelection) {
+    selStart=cursor;
+    selEnd=cursor;
+  }
+
   if (followPattern || forced) {
     e->setOrder(order);
   }
