@@ -931,15 +931,6 @@ void FurnaceGUI::drawSettings() {
           ImGui::SetTooltip(_("when enabled, loading an instrument will use the stored name (if present).\notherwise, it will use the file name."));
         }
 
-        bool autoFillSaveB=settings.autoFillSave;
-        if (ImGui::Checkbox(_("Auto-fill file name when saving"),&autoFillSaveB)) {
-          settings.autoFillSave=autoFillSaveB;
-          settingsChanged=true;
-        }
-        if (ImGui::IsItemHovered()) {
-          ImGui::SetTooltip(_("fill the file name field with an appropriate file name when saving or exporting."));
-        }
-
         // SUBSECTION NEW SONG
         CONFIG_SUBSECTION(_("New Song"));
         ImGui::AlignTextToFramePadding();
@@ -4895,8 +4886,6 @@ void FurnaceGUI::readConfig(DivConfig& conf, FurnaceGUISettingGroups groups) {
     settings.backupInterval=conf.getInt("backupInterval",30);
     settings.backupMaxCopies=conf.getInt("backupMaxCopies",5);
 
-    settings.autoFillSave=conf.getInt("autoFillSave",0);
-
     settings.locale=conf.getString("locale","");
 
     settings.backgroundPlay=conf.getInt("backgroundPlay",0);
@@ -5402,7 +5391,6 @@ void FurnaceGUI::readConfig(DivConfig& conf, FurnaceGUISettingGroups groups) {
   clampSetting(settings.backupEnable,0,1);
   clampSetting(settings.backupInterval,10,86400);
   clampSetting(settings.backupMaxCopies,1,100);
-  clampSetting(settings.autoFillSave,0,1);
   clampSetting(settings.autoMacroStepSize,0,2);
   clampSetting(settings.s3mOPL3,0,1);
   clampSetting(settings.sampleImportInstDetune,0,1);
@@ -5493,8 +5481,6 @@ void FurnaceGUI::writeConfig(DivConfig& conf, FurnaceGUISettingGroups groups) {
     conf.set("backupEnable",settings.backupEnable);
     conf.set("backupInterval",settings.backupInterval);
     conf.set("backupMaxCopies",settings.backupMaxCopies);
-
-    conf.set("autoFillSave",settings.autoFillSave);
 
     conf.set("locale",settings.locale);
 

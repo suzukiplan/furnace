@@ -2050,7 +2050,6 @@ class FurnaceGUI {
     int backupEnable;
     int backupInterval;
     int backupMaxCopies;
-    int autoFillSave;
     int autoMacroStepSize;
     int backgroundPlay;
     int noMaximizeWorkaround;
@@ -2304,7 +2303,6 @@ class FurnaceGUI {
       backupEnable(1),
       backupInterval(30),
       backupMaxCopies(5),
-      autoFillSave(0),
       autoMacroStepSize(0),
       backgroundPlay(0),
       noMaximizeWorkaround(0),

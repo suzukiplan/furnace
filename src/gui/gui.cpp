@@ -1898,7 +1898,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("DefleMask 1.1.3 module"), "*.dmf"},
         workingDirSong,
         dpiScale,
-        (settings.autoFillSave)?shortName:""
+        shortName.empty()?"":shortName
       );
       break;
     case GUI_FILE_SAVE_DMF_LEGACY:
@@ -1908,7 +1908,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("DefleMask 1.0/legacy module"), "*.dmf"},
         workingDirSong,
         dpiScale,
-        (settings.autoFillSave)?shortName:""
+        shortName.empty()?"":shortName
       );
       break;
     case GUI_FILE_INS_OPEN:
@@ -1978,7 +1978,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("Furnace instrument"), "*.fui"},
         workingDirIns,
         dpiScale,
-        (settings.autoFillSave)?e->getIns(curIns)->name:""
+        e->getIns(curIns)->name
       );
       break;
     case GUI_FILE_INS_SAVE_DMP:
@@ -1988,7 +1988,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("DefleMask preset"), "*.dmp"},
         workingDirIns,
         dpiScale,
-        (settings.autoFillSave)?e->getIns(curIns)->name:""
+        e->getIns(curIns)->name
       );
       break;
     case GUI_FILE_INS_SAVE_ALL:
@@ -2076,7 +2076,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("Wave file"), "*.wav"},
         workingDirSample,
         dpiScale,
-        (settings.autoFillSave)?e->getSample(curSample)->name:""
+        e->getSample(curSample)->name
       );
       break;
     case GUI_FILE_SAMPLE_SAVE_RAW:
@@ -2086,7 +2086,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("all files"), "*"},
         workingDirSample,
         dpiScale,
-        (settings.autoFillSave)?e->getSample(curSample)->name:""
+        e->getSample(curSample)->name
       );
       break;
     case GUI_FILE_SAMPLE_SAVE_ALL:
@@ -2104,7 +2104,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("Wave file"), "*.wav"},
         workingDirAudioExport,
         dpiScale,
-        (settings.autoFillSave)?shortName:""
+        shortName.empty()?"":shortName
       );
       break;
     case GUI_FILE_EXPORT_AUDIO_PER_SYS:
@@ -2114,7 +2114,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("Wave file"), "*.wav"},
         workingDirAudioExport,
         dpiScale,
-        (settings.autoFillSave)?shortName:""
+        shortName.empty()?"":shortName
       );
       break;
     case GUI_FILE_EXPORT_AUDIO_PER_CHANNEL:
@@ -2124,7 +2124,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("Wave file"), "*.wav"},
         workingDirAudioExport,
         dpiScale,
-        (settings.autoFillSave)?shortName:""
+        shortName.empty()?"":shortName
       );
       break;
     case GUI_FILE_EXPORT_VGM:
@@ -2134,7 +2134,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("VGM file"), "*.vgm"},
         workingDirVGMExport,
         dpiScale,
-        (settings.autoFillSave)?shortName:""
+        shortName.empty()?"":shortName
       );
       break;
     case GUI_FILE_EXPORT_TEXT:
@@ -2144,7 +2144,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("text file"), "*.txt"},
         workingDirROMExport,
         dpiScale,
-        (settings.autoFillSave)?shortName:""
+        shortName.empty()?"":shortName
       );
       break;
     case GUI_FILE_EXPORT_CMDSTREAM:
@@ -2154,7 +2154,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
         {_("binary file"), "*.bin"},
         workingDirROMExport,
         dpiScale,
-        (settings.autoFillSave)?shortName:""
+        shortName.empty()?"":shortName
       );
       break;
     case GUI_FILE_EXPORT_ROM:
@@ -2171,7 +2171,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
           {romFilterName, "*"+romFilterExt},
           workingDirROMExport,
           dpiScale,
-          (settings.autoFillSave)?shortName:""
+          shortName.empty()?"":shortName
         );
       }
       break;
