@@ -4494,7 +4494,39 @@ bool FurnaceGUI::loop() {
     oldRowChanged=false;
     playOrder=nextPlayOrder;
     if (followPattern && (!e->isStepping() || pendingStepUpdate)) {
-      curOrder=playOrder;
+      if (curOrder!=playOrder) {
+        SelectionPoint previousCursor=cursor;
+        unsigned char previousOrder=curOrder;
+        bool hadCollapsedSelection=(
+          !selecting &&
+          selStart.order==selEnd.order &&
+          selStart.order==previousCursor.order &&
+          selStart.xCoarse==selEnd.xCoarse &&
+          selStart.xFine==selEnd.xFine &&
+          selStart.y==selEnd.y &&
+          selStart.xCoarse==previousCursor.xCoarse &&
+          selStart.xFine==previousCursor.xFine &&
+          selStart.y==previousCursor.y
+        );
+        bool hadSingleOrderSelection=(
+          !selecting &&
+          selStart.order==selEnd.order &&
+          selStart.order==previousOrder
+        );
+
+        curOrder=playOrder;
+        cursor.order=playOrder;
+
+        if (hadCollapsedSelection) {
+          selStart=cursor;
+          selEnd=cursor;
+        } else if (hadSingleOrderSelection) {
+          selStart.order=playOrder;
+          selEnd.order=playOrder;
+        }
+      } else {
+        curOrder=playOrder;
+      }
     }
     if (e->isPlaying()) {
       if (oldRow!=nextOldRow) oldRowChanged=true;
